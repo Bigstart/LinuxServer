@@ -90,7 +90,7 @@
 
     <script type="text/javascript">
         // 连接到服务器
-        var socket = new WebSocket('ws://' + window.location.hostname + ':8081');
+        var socket = new WebSocket('ws://' + location.hostname + ':8081');
         
         // 获取DOM元素
         var chatMessages = document.getElementById('chat-messages');

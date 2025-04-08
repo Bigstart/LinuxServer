@@ -13,6 +13,8 @@
 #include <openssl/evp.h>
 #include <openssl/buffer.h>
 
+#include "spark_api.h"  // 头文件引入位置
+
 // 端口配置
 const int PORT = 8080;
 const int WS_PORT = 8081; // WebSocket 使用不同端口
@@ -136,17 +138,32 @@ void handle_ws_client(int client_socket) {
             if (message == "GET_TIME") {
                 response_msg = "SERVER_TIME: " + get_current_time();
             } else {
-                response_msg = "INVALID_REQUEST";
+                response_msg = ask_spark_api(message);
             }
 
             // 创建 WebSocket 帧并发送
             std::vector<unsigned char> frame;
             frame.push_back(0x81); // FIN + text frame opcode
-            frame.push_back(response_msg.size());
-            frame.insert(frame.end(), response_msg.begin(), response_msg.end());
-            std::string ws_frame(frame.begin(), frame.end());
+            
+            size_t msg_len = response_msg.size();
+if (msg_len <= 125) {
+    frame.push_back(static_cast<unsigned char>(msg_len));
+} else if (msg_len <= 65535) {  // 使用2字节表示长度
+    frame.push_back(126);
+    frame.push_back(static_cast<unsigned char>((msg_len >> 8) & 0xFF)); // 高位在前
+    frame.push_back(static_cast<unsigned char>(msg_len & 0xFF));
+} else {  // 使用8字节表示长度（处理大文件）
+    frame.push_back(127);
+    for (int i = 7; i >= 0; --i) {  // 大端字节序
+        frame.push_back(static_cast<unsigned char>((msg_len >> (8 * i)) & 0xFF));
+    }
+}
 
-            send(client_socket, ws_frame.c_str(), ws_frame.length(), 0);
+// 添加负载数据
+frame.insert(frame.end(), response_msg.begin(), response_msg.end());
+
+// 发送帧
+send(client_socket, frame.data(), frame.size(), 0);
         }
     } else {
         std::cerr << "未能提取 Sec-WebSocket-Key，握手失败\n";
