@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>时间服务器聊天框</title>
+    <style type="text/css">
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+        }
+        .chat-container {
+            width: 350px;
+            margin: 20px auto;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .chat-header {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px;
+            text-align: center;
+            font-weight: bold;
+        }
+        .chat-messages {
+            height: 400px;
+            padding: 10px;
+            overflow-y: auto;
+            background-color: #e5e5e5;
+        }
+        .message {
+            margin-bottom: 10px;
+            padding: 8px 12px;
+            border-radius: 5px;
+            max-width: 70%;
+            word-wrap: break-word;
+        }
+        .my-message {
+            background-color: #dcf8c6;
+            margin-left: auto;
+            margin-right: 10px;
+        }
+        .server-message {
+            background-color: white;
+            margin-left: 10px;
+        }
+        .time-message {
+            font-size: 12px;
+            color: #999;
+            text-align: center;
+            margin: 10px 0;
+        }
+        .chat-input {
+            display: flex;
+            padding: 10px;
+            background-color: #f5f5f5;
+            border-top: 1px solid #ddd;
+        }
+        #message-input {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+        }
+        #send-button {
+            padding: 8px 15px;
+            margin-left: 10px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">时间服务器</div>
+        <div class="chat-messages" id="chat-messages">
+            <!-- 消息将在这里动态添加 -->
+        </div>
+        <div class="chat-input">
+            <input type="text" id="message-input" placeholder="输入 GET_TIME 获取时间">
+            <button id="send-button" onclick="sendMessage()">发送</button>
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        // 连接到服务器
+        var socket = new WebSocket('ws://' + window.location.hostname + ':8081');
+        
+        // 获取DOM元素
+        var chatMessages = document.getElementById('chat-messages');
+        var messageInput = document.getElementById('message-input');
+        
+        // 添加消息到聊天框
+        function addMessage(text, type) {
+            var messageDiv = document.createElement('div');
+            messageDiv.className = 'message ' + type;
+            messageDiv.textContent = text;
+            chatMessages.appendChild(messageDiv);
+            
+            // 自动滚动到底部
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+        
+        // 发送消息
+        function sendMessage() {
+            var message = messageInput.value.trim();
+            if (message) {
+                socket.send(message);
+                addMessage(message, 'my-message');
+                messageInput.value = '';
+            }
+        }
+        
+        // WebSocket事件处理
+        socket.onopen = function() {
+            addMessage('已连接到时间服务器', 'time-message');
+        };
+        
+        socket.onmessage = function(event) {
+            addMessage(event.data, 'server-message');
+        };
+        
+        socket.onclose = function() {
+            addMessage('连接已断开', 'time-message');
+        };
+        
+        socket.onerror = function(error) {
+            addMessage('连接错误: ' + error.message, 'time-message');
+        };
+        
+        // 按回车发送消息
+        messageInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+    </script>
+</body>
+</html>
