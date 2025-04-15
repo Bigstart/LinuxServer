@@ -6,27 +6,18 @@
 #include <unistd.h>
 #include <cstring>
 #include <thread>
-#include <websocketpp/config/asio_no_tls.hpp>
-#include <websocketpp/server.hpp>
+#include <vector>
+#include <mutex>
+#include <map>
+#include <sstream>
 #include "spark_api.h"
 
-// 端口配置
 const int HTTP_PORT = 8080;
-const int WS_PORT = 8081;
 const int BUFFER_SIZE = 1024;
 
-typedef websocketpp::server<websocketpp::config::asio> wsserver;
-wsserver ws_server;
-
-// 获取当前时间
-std::string get_current_time() {
-    time_t now = time(0);
-    struct tm time_struct;
-    char buf[80];
-    time_struct = *localtime(&now);
-    strftime(buf, sizeof(buf), "%Y-%m-%d %X", &time_struct);
-    return buf;
-}
+std::mutex msg_mutex;
+std::map<long, std::string> message_store;
+long last_timestamp = 0;
 
 // HTTP服务器实现
 void run_http_server() {
@@ -40,116 +31,91 @@ void run_http_server() {
         exit(EXIT_FAILURE);
     }
     
-    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt))) {
-        perror("setsockopt");
-        exit(EXIT_FAILURE);
-    }
+    setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt));
     
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = INADDR_ANY;
     address.sin_port = htons(HTTP_PORT);
     
-    if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
-        perror("bind failed");
-        exit(EXIT_FAILURE);
-    }
-    
-    if (listen(server_fd, 3) < 0) {
-        perror("listen");
-        exit(EXIT_FAILURE);
-    }
+    bind(server_fd, (struct sockaddr *)&address, sizeof(address)));
+    listen(server_fd, 3);
     
     std::cout << "HTTP server running on port " << HTTP_PORT << std::endl;
     
     while (true) {
-        if ((client_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen)) < 0) {
-            perror("accept");
-            continue;
-        }
+        client_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen);
         
         char buffer[BUFFER_SIZE] = {0};
         read(client_socket, buffer, BUFFER_SIZE);
         
-        FILE* html_file = fopen("index.html", "r");
-        if (!html_file) {
-            perror("fopen");
-            const char* not_found = "HTTP/1.1 404 Not Found\r\n\r\nFile not found";
-            send(client_socket, not_found, strlen(not_found), 0);
-            close(client_socket);
-            continue;
+        // 处理请求
+        std::string request(buffer);
+        std::string response;
+        
+        if (request.find("GET / ") != std::string::npos) {
+            // 返回HTML页面
+            FILE* html_file = fopen("index.html", "r");
+            if (html_file) {
+                fseek(html_file, 0, SEEK_END);
+                long file_size = ftell(html_file);
+                rewind(html_file);
+                char* html_content = new char[file_size + 1];
+                fread(html_content, 1, file_size, html_file);
+                fclose(html_file);
+                
+                response = "HTTP/1.1 200 OK\r\n"
+                           "Content-Type: text/html\r\n"
+                           "Connection: close\r\n\r\n" + 
+                           std::string(html_content);
+                delete[] html_content;
+            } else {
+                response = "HTTP/1.1 404 Not Found\r\n\r\nFile not found";
+            }
+        }
+        else if (request.find("POST /send") != std::string::npos) {
+            // 处理消息发送
+            std::string msg(request.begin() + request.find("\r\n\r\n") + 4, request.end());
+            std::string api_response = ask_spark_api(msg);
+            
+            std::lock_guard<std::mutex> lock(msg_mutex);
+            message_store[++last_timestamp] = api_response;
+            
+            response = "HTTP/1.1 200 OK\r\n\r\nOK";
+        }
+        else if (request.find("GET /poll") != std::string::npos) {
+            // 处理轮询请求
+            long client_time = 0;
+            size_t pos = request.find("t=");
+            if (pos != std::string::npos) {
+                client_time = atol(request.substr(pos + 2).c_str());
+            }
+            
+            std::stringstream ss;
+            std::lock_guard<std::mutex> lock(msg_mutex);
+            for (auto& [ts, msg] : message_store) {
+                if (ts > client_time) {
+                    ss << ts << "|" << msg << "\n";
+                }
+            }
+            
+            response = "HTTP/1.1 200 OK\r\n"
+                       "Content-Type: text/plain\r\n"
+                       "Connection: close\r\n\r\n" + 
+                       ss.str();
+        }
+        else {
+            response = "HTTP/1.1 404 Not Found\r\n\r\nInvalid request";
         }
         
-        fseek(html_file, 0, SEEK_END);
-        long file_size = ftell(html_file);
-        rewind(html_file);
-        
-        char* html_content = new char[file_size + 1];
-        fread(html_content, 1, file_size, html_file);
-        html_content[file_size] = '\0';
-        fclose(html_file);
-        
-        std::string response = "HTTP/1.1 200 OK\r\n"
-                             "Content-Type: text/html\r\n"
-                             "Connection: close\r\n"
-                             "\r\n" + std::string(html_content);
-        
         send(client_socket, response.c_str(), response.length(), 0);
-        delete[] html_content;
         close(client_socket);
     }
 }
 
-// WebSocket消息处理
-void on_message(wsserver* s, websocketpp::connection_hdl hdl, wsserver::message_ptr msg) {
-    std::string payload = msg->get_payload();
-    std::string response;
-
-    if (payload == "GET_TIME") {
-        response = "SERVER_TIME: " + get_current_time();
-    } else {
-        response = ask_spark_api(payload);
-    }
-
-    try {
-        s->send(hdl, response, msg->get_opcode());
-    } catch (const websocketpp::exception& e) {
-        std::cerr << "Send failed: " << e.what() << std::endl;
-    }
-}
-
-// WebSocket服务器实现
-void run_websocket_server() {
-    try {
-        ws_server.set_reuse_addr(true);
-        ws_server.init_asio();
-        
-        ws_server.set_message_handler(std::bind(&on_message, &ws_server, 
-            std::placeholders::_1, std::placeholders::_2));
-        
-        // 可选：关闭详细日志
-        ws_server.clear_access_channels(websocketpp::log::alevel::all);
-        
-        ws_server.listen(WS_PORT);
-        ws_server.start_accept();
-        
-        std::cout << "WebSocket server running on port " << WS_PORT << std::endl;
-        ws_server.run();
-    } catch (const websocketpp::exception& e) {
-        std::cerr << "WebSocket server error: " << e.what() << std::endl;
-    } catch (...) {
-        std::cerr << "Unknown error" << std::endl;
-    }
-}
-
 int main() {
-    // 启动HTTP服务器
     std::thread http_thread(run_http_server);
     http_thread.detach();
-
-    // 启动WebSocket服务器
-    std::thread ws_thread(run_websocket_server);
-    ws_thread.detach();
-
+    
     std::cout << "All services started..." << std::endl;
     while (true) {
         std::this_thread::sleep_for(std::chrono::hours(1));
