@@ -19,6 +19,36 @@ std::mutex msg_mutex;
 std::map<long, std::string> message_store;
 long last_timestamp = 0;
 
+
+// 转义字符串中的换行符、回车符和双引号
+std::string escape_json_string(const std::string &input) {
+    std::string escaped = input;
+
+    // 转义双引号
+    size_t pos = 0;
+    while ((pos = escaped.find("\"", pos)) != std::string::npos) {
+        escaped.replace(pos, 1, "\\\"");
+        pos += 2;  // 跳过已转义的字符
+    }
+
+    // 转义换行符
+    size_t pos_n = 0;
+    while ((pos_n = escaped.find("\n", pos_n)) != std::string::npos) {
+        escaped.replace(pos_n, 1, "\\n");
+        pos_n += 2;
+    }
+
+    // 转义回车符
+    size_t pos_r = 0;
+    while ((pos_r = escaped.find("\r", pos_r)) != std::string::npos) {
+        escaped.replace(pos_r, 1, "\\r");
+        pos_r += 2;
+    }
+
+    return escaped;
+}
+
+
 // HTTP服务器实现
 void run_http_server() {
     int server_fd, client_socket;
@@ -37,7 +67,7 @@ void run_http_server() {
     address.sin_addr.s_addr = INADDR_ANY;
     address.sin_port = htons(HTTP_PORT);
     
-    bind(server_fd, (struct sockaddr *)&address, sizeof(address)));
+    bind(server_fd, (struct sockaddr *)&address, sizeof(address));
     listen(server_fd, 3);
     
     std::cout << "HTTP server running on port " << HTTP_PORT << std::endl;
@@ -75,35 +105,18 @@ void run_http_server() {
         else if (request.find("POST /send") != std::string::npos) {
             // 处理消息发送
             std::string msg(request.begin() + request.find("\r\n\r\n") + 4, request.end());
+            
+            std::cout << "msg: " << msg << std::endl;
+            
             std::string api_response = ask_spark_api(msg);
+            
+            std::cout << "API Response: " << api_response << std::endl;
             
             std::lock_guard<std::mutex> lock(msg_mutex);
             message_store[++last_timestamp] = api_response;
             
-            response = "HTTP/1.1 200 OK\r\n\r\nOK";
-        }
-        else if (request.find("GET /poll") != std::string::npos) {
-            // 处理轮询请求
-            long client_time = 0;
-            size_t pos = request.find("t=");
-            if (pos != std::string::npos) {
-                client_time = atol(request.substr(pos + 2).c_str());
-            }
-            
-            std::stringstream ss;
-            std::lock_guard<std::mutex> lock(msg_mutex);
-            for (auto& [ts, msg] : message_store) {
-                if (ts > client_time) {
-                    ss << ts << "|" << msg << "\n";
-                }
-            }
-            
-            response = "HTTP/1.1 200 OK\r\n"
-                       "Content-Type: text/plain\r\n"
-                       "Connection: close\r\n\r\n" + 
-                       ss.str();
-        }
-        else {
+            response = "HTTP/1.1 200 OK\r\n\r\n" + api_response;
+        }else {
             response = "HTTP/1.1 404 Not Found\r\n\r\nInvalid request";
         }
         

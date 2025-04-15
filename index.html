@@ -11,7 +11,7 @@
             background-color: #ffffff;
         }
         .chat-container {
-            width: 300px;
+            width: 310px;
             margin: 0 auto;
             border: 1px solid #999999;
         }
@@ -23,16 +23,18 @@
             font-weight: bold;
         }
         .chat-messages {
-            height: 200px;
+            height: 160px;
             padding: 4px;
             overflow-y: auto;
             background-color: #f0f0f0;
+            word-wrap:break-word; /* 长文本自动换行 */
         }
         .message {
             margin: 4px 0;
             padding: 4px;
             border: 1px solid #cccccc;
             background-color: white;
+            white-space:normal; 
         }
         .my-message {
             background-color: #ccffcc;
@@ -53,7 +55,7 @@
             padding: 3px;
         }
         #send-button {
-            padding: 3px 8px;
+            padding: 3px 17px;
             background-color: #006600;
             color: white;
             border: 1px solid #004400;
@@ -63,7 +65,9 @@
 <body>
     <div class="chat-container">
         <div class="chat-header">时间服务器</div>
-        <div class="chat-messages" id="chat-messages"></div>
+        <div class="chat-messages" id="chat-messages">
+            <pre id="message-container"></pre> <!-- 使用 pre 标签 -->
+        </div>
         <div class="chat-input">
             <input type="text" id="message-input">
             <button id="send-button" onclick="sendMessage()">发送</button>
@@ -71,59 +75,39 @@
     </div>
 
     <script type="text/javascript">
-        var lastUpdate = 0;
-        var messageQueue = [];
-        
         // 添加消息到聊天框
         function addMessage(text, type) {
+            var pre = document.getElementById('message-container');
             var div = document.createElement('div');
             div.className = 'message ' + type;
-            div.innerHTML = text;
-            document.getElementById('chat-messages').appendChild(div);
+            div.innerText = text;
+            pre.appendChild(div);
             
-            // 保持滚动到底部
             var messagesDiv = document.getElementById('chat-messages');
-            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            messagesDiv.scrollTop = messagesDiv.scrollHeight; // 保持滚动到底部
         }
 
-        // 发送消息
+        // 发送消息并等待服务器的响应
         function sendMessage() {
             var input = document.getElementById('message-input');
             var message = input.value.trim();
-            if(message) {
+            if(message !== "") {
+                addMessage(message, 'my-message');
+                
                 var xhr = new XMLHttpRequest();
                 xhr.open('POST', '/send', true);
                 xhr.setRequestHeader('Content-Type', 'text/plain');
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState == 4 && xhr.status == 200) {
+                        // // 请求完成后再清空输入框
+                        input.value = '';
+                        addMessage(xhr.responseText, 'message');
+                    }
+                };
                 xhr.send(message);
-                addMessage(message, 'my-message');
-                input.value = '';
             }
         }
-
-        // 轮询更新
-        function poll() {
-            var xhr = new XMLHttpRequest();
-            xhr.open('GET', '/poll?t=' + lastUpdate, true);
-            xhr.onreadystatechange = function() {
-                if(xhr.readyState == 4 && xhr.status == 200) {
-                    var messages = xhr.responseText.split('\n');
-                    messages.forEach(function(msg) {
-                        if(msg) {
-                            var parts = msg.split('|');
-                            if(parts[0] > lastUpdate) {
-                                addMessage(parts[1], 'message');
-                                lastUpdate = parts[0];
-                            }
-                        }
-                    });
-                }
-            };
-            xhr.send(null);
-        }
-
-        // 启动轮询
-        setInterval(poll, 2000);
-        addMessage('系统已启动轮询连接', 'time-message');
     </script>
 </body>
 </html>
+
