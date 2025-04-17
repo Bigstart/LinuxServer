@@ -12,7 +12,7 @@
 #include <sstream>
 #include "spark_api.h"
 
-const int HTTP_PORT = 8080;
+const int HTTP_PORT = 8081;
 const int BUFFER_SIZE = 1024;
 
 std::mutex msg_mutex;
@@ -46,6 +46,45 @@ std::string escape_json_string(const std::string &input) {
     }
 
     return escaped;
+}
+
+std::string url_decode(const std::string& encoded_str) {
+    std::string decoded_str;
+    size_t length = encoded_str.length();
+    for (size_t i = 0; i < length; ++i) {
+        if (encoded_str[i] == '%' && i + 2 < length) {
+            // 如果是%符号，转换后面的两个字符为十六进制字符
+            int value;
+            std::istringstream(encoded_str.substr(i + 1, 2)) >> std::hex >> value;
+            decoded_str.push_back(static_cast<char>(value));
+            i += 2;  // 跳过已处理的%XX部分
+        } else if (encoded_str[i] == '+') {
+            // 处理+号（URL编码中+代表空格）
+            decoded_str.push_back(' ');
+        } else {
+            decoded_str.push_back(encoded_str[i]);
+        }
+    }
+    return decoded_str;
+}
+
+// 查找 message= 后面的内容
+std::string extract_message(const std::string& request) {
+    size_t message_pos = request.find("message=");
+    if (message_pos != std::string::npos) {
+        // 从 message= 后面开始提取实际的消息内容
+        return request.substr(message_pos + 8); // 8 是 "message=" 的长度
+    }
+    return ""; // 如果没有找到 message=，返回空字符串
+}
+
+// 处理接收到的 POST 数据（获取消息）
+std::string extract_post_data(const std::string &request) {
+    size_t pos = request.find("\r\n\r\n");
+    if (pos == std::string::npos) {
+        return "";
+    }
+    return request.substr(pos + 4);  // 获取请求体内容
 }
 
 
@@ -82,34 +121,14 @@ void run_http_server() {
         std::string request(buffer);
         std::string response;
         
-        if (request.find("GET / ") != std::string::npos) {
-            // 返回HTML页面
-            FILE* html_file = fopen("index.html", "r");
-            if (html_file) {
-                fseek(html_file, 0, SEEK_END);
-                long file_size = ftell(html_file);
-                rewind(html_file);
-                char* html_content = new char[file_size + 1];
-                fread(html_content, 1, file_size, html_file);
-                fclose(html_file);
-                
-                response = "HTTP/1.1 200 OK\r\n"
-                           "Content-Type: text/html\r\n"
-                           "Connection: close\r\n\r\n" + 
-                           std::string(html_content);
-                delete[] html_content;
-            } else {
-                response = "HTTP/1.1 404 Not Found\r\n\r\nFile not found";
-            }
-        }
-        else if (request.find("POST /send") != std::string::npos) {
-            // 处理消息发送
-            std::string msg(request.begin() + request.find("\r\n\r\n") + 4, request.end());
-            
-            std::cout << "msg: " << msg << std::endl;
+        if (request.find("POST /send") != std::string::npos) {
+            // 提取消息内容
+            std::string msg = extract_post_data(request);
+            msg = extract_message(msg);
+            msg = url_decode(msg);
+            std::cout << "Received message: " << msg << std::endl;
             
             std::string api_response = ask_spark_api(msg);
-            
             std::cout << "API Response: " << api_response << std::endl;
             
             std::lock_guard<std::mutex> lock(msg_mutex);

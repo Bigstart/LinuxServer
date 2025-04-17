@@ -27,14 +27,14 @@
             padding: 4px;
             overflow-y: auto;
             background-color: #f0f0f0;
-            word-wrap:break-word; /* 长文本自动换行 */
+            word-wrap: break-word;
         }
         .message {
             margin: 4px 0;
             padding: 4px;
             border: 1px solid #cccccc;
             background-color: white;
-            white-space:normal; 
+            white-space: normal;
         }
         .my-message {
             background-color: #ccffcc;
@@ -95,16 +95,15 @@
                 addMessage(message, 'my-message');
                 
                 var xhr = new XMLHttpRequest();
-                xhr.open('POST', '/send', true);
-                xhr.setRequestHeader('Content-Type', 'text/plain');
+                xhr.open('POST', 'chat.php', true); // 修改为 chat.php 文件路径
+                xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
                 xhr.onreadystatechange = function() {
                     if (xhr.readyState == 4 && xhr.status == 200) {
-                        // // 请求完成后再清空输入框
                         input.value = '';
                         addMessage(xhr.responseText, 'message');
                     }
                 };
-                xhr.send(message);
+                xhr.send('message=' + encodeURIComponent(message)); // 发送的数据格式为 x-www-form-urlencoded
             }
         }
     </script>
