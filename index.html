@@ -75,6 +75,45 @@
     </div>
 
     <script type="text/javascript">
+    
+        // 改进版逐字显示函数（保留换行符）
+       function typeWriter(element, text, baseSpeed, callback) {
+           var i = 0;
+           element.innerHTML = ''; // 清空原有内容
+           var messagesDiv = document.getElementById('chat-messages');
+        
+           function addChars() {
+               if (i < text.length) {
+                    // 处理换行符
+                    if (text[i] === '\n') {
+                       element.innerHTML += '<br>';
+                        i++;
+                    } 
+                   // 随机1-5个字符
+                   else {
+                        var nextNewline = text.indexOf('\n', i);
+                        var maxChunk = (nextNewline === -1) ? text.length : nextNewline;
+                       var chunkSize = Math.min(
+                            Math.floor(Math.random() * 5) + 1, 
+                            maxChunk - i
+                        );
+                    
+                       // 添加普通文本
+                       element.innerHTML += text.substr(i, chunkSize);
+                       i += chunkSize;
+                    }
+                
+                   // 立即滚动到底部
+                   messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                   setTimeout(addChars, baseSpeed);
+               } else if (callback) {
+                    callback();
+               }
+           }
+        
+            addChars();
+        }
+    
         // 添加消息到聊天框
         function addMessage(text, type) {
             var pre = document.getElementById('message-container');
@@ -83,8 +122,9 @@
             div.innerText = text;
             pre.appendChild(div);
             
-            var messagesDiv = document.getElementById('chat-messages');
-            messagesDiv.scrollTop = messagesDiv.scrollHeight; // 保持滚动到底部
+            // 使用逐字显示效果
+            typeWriter(div, text, 90, function() {
+            });
         }
 
         // 发送消息并等待服务器的响应
