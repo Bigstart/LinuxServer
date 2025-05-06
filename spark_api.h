@@ -30,7 +30,7 @@ static size_t CurlWriteCallback(void* contents, size_t size, size_t nmemb, void*
  */
 std::string ask_spark_api(const std::string& question) {
     const std::string api_url = "https://spark-api-open.xf-yun.com/v1/chat/completions";
-    const std::string api_key = "pZuAuKeSjGgqTeiFKMWs:MVsBtjDQboOMaFQeztoO";  // ⚠️ 替换成你的APIPassword
+    const std::string api_key = "这里替换成自己的apiPassword";  // ⚠️ 替换成你的APIPassword
 
     json request_body = {
         {"model", "lite"},
