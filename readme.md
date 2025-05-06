@@ -32,7 +32,17 @@ sudo apt install php-curl
 php -S 192.168.1.175:8080
 ```
 
-## 3.启动内网穿透
+
+## 3.获取人工智能的api
+### 我使用的是讯飞星火的api    https://xinghuo.xfyun.cn/sparkapi
+### 里面有一个lite  api是无限量调用的  但是ai比较傻 可做测试学习用
+### 同理 有条件的可接入deepseek的api或者chatgpt 
+
+#### 获取到api后  打开 spark_api.h 文件   第33行 更改为自己的api password
+
+
+
+## 4.启动内网穿透
 ### 操作步骤
 #### 关注「敲代码斯基」公众号
 
