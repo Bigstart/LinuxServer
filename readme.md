@@ -6,7 +6,18 @@
 - PHP 7.0+ 环境
 - curl 工具
 
-## 1. C++ 服务器部署
+
+
+## 1.获取人工智能的api
+### 我使用的是讯飞星火的api    https://xinghuo.xfyun.cn/sparkapi
+### 里面有一个lite  api是无限量调用的  但是ai比较傻 可做测试学习用
+### 同理 有条件的可接入deepseek的api或者chatgpt 
+
+#### 获取到api后  打开 spark_api.h 文件   第33行 更改为自己的api password
+
+
+
+## 2. C++ 服务器部署
 
 ### 编译程序
 ```bash
@@ -16,7 +27,7 @@ g++ time_server.cpp -o server -lcurl
 ### 启动服务器
 ./server
 
-## 2. PHP 环境配置
+## 3. PHP 环境配置
 
 ### 安装依赖
 ```bash
@@ -33,12 +44,7 @@ php -S 192.168.1.175:8080
 ```
 
 
-## 3.获取人工智能的api
-### 我使用的是讯飞星火的api    https://xinghuo.xfyun.cn/sparkapi
-### 里面有一个lite  api是无限量调用的  但是ai比较傻 可做测试学习用
-### 同理 有条件的可接入deepseek的api或者chatgpt 
 
-#### 获取到api后  打开 spark_api.h 文件   第33行 更改为自己的api password
 
 
 
